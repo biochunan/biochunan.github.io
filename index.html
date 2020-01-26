@@ -1,0 +1,1974 @@
+<!doctype html>
+<html>
+<head>
+    <title>Molecular Viewer</title>
+    <meta charset="utf-8">
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css">
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <script type="text/javascript" src="../jsmol/JSmol.min.js"></script>
+    <script type="text/javascript" src="../jmol/Jmol.js"></script>
+    <style>
+        body {
+            margin: 0px 30px 0 30px;
+        }
+
+        strong {
+            font-size: 12pt;
+        }
+
+        input[type=checkbox] {
+            font-size: 10pt;
+        }
+
+        input[type=button] {
+            font-size: 8pt;
+        }
+
+        .btn-default {
+            font-size: 10pt;
+        }
+
+        label {
+            font-weight: normal;
+        }
+
+        .slider {
+            -webkit-appearance: none;
+            width: 100%;
+            height: 15px;
+            border-radius: 5px;
+            background: #d3d3d3;
+            outline: none;
+            opacity: 0.7;
+            -webkit-transition: .2s;
+            transition: opacity .2s;
+        }
+
+        .slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 25px;
+            height: 25px;
+            border-radius: 50%;
+            background: #4CAF50;
+            cursor: pointer;
+        }
+
+        .slider::-moz-range-thumb {
+            width: 25px;
+            height: 25px;
+            border-radius: 50%;
+            background: #4CAF50;
+            cursor: pointer;
+        }
+    </style>
+    <script>
+        String.prototype.format = function () {
+            a = this;
+            for (var k in arguments) {
+                a = a.replace("{" + k + "}", arguments[k]);
+            }
+            return a
+        };
+        // var aa = {
+        //     'A'	:'ALA', 'R': 'Arg', 'N': 'ASN', 'D': 'ASP', 'C': 'CYS',
+        //     'Q'	:'GLN', 'E': 'GLU', 'G': 'GLY', 'H': 'HIS', 'I': 'ILE',
+        //     'L'	:'LEU', 'K': 'LYS', 'M': 'MET', 'F': 'PHE', 'P': 'PRO',
+        //     'S'	:'SER', 'T': 'THR', 'W': 'TRP', 'Y': 'TYR', 'V': 'VAL'};
+    </script>
+</head>
+
+<body>
+<script>
+    function load(wt, wt_chn, mt_cst, mt_cst_chn, mt_pre, mt_pre_chn, pos) {
+        return "colour background lightgrey;" +
+            //load models
+            "load =" + wt + " filter '*:" + wt_chn + "';" +
+            "load APPEND =" + mt_cst + " filter '*:" + mt_cst_chn + "';" +
+            "load APPEND " + mt_pre + " filter '*:" + mt_pre_chn + "';" +
+            "cartoon on; wireframe off; spacefill 0; select {*.CA}; colour cartoon translucent 0.5;model 0;" +
+            //superpose
+            "compare {2.1} {1.1} ROTATE TRANSLATE 0; compare {3.1} {1.1} ROTATE TRANSLATE 0;" +
+            //define groups
+            "define ~SNPpos {" + pos + "};" +
+            "define ~SNPpos1 {" + pos + "/1.1};" +
+            "define ~SNPpos2 {" + pos + "/2.1};" +
+            "define ~SNPpos3 {" + pos + "/3.1};" +
+            "define ~SNPsc {~SNPpos and not backbone};" +
+            //colour the SAAP
+            "colour {*} cpk;" +
+            "select ~SNPpos;" + "colour bond white;" +
+            "wireframe 0.1; spacefill 0.3; colour cartoon translucent 0.7;" +
+            "colour {*.C??/1.1} grey; colour {*.C??/2.1} orange; colour {*.C??/3.1} lightgreen;" +
+            // "colour {~SNPpos.O??} red; colour {~SNPpos.N??} blue;" +
+            "zoom {~SNPpos}; set measurementUnits angstroms;" +
+            "set echo bottom left; font echo 20 serif bold; color echo red;"
+    }
+
+    function generate_ini_label(wt, wt_chn, pos, wt_aa, mt_cst, mt_cst_chn, mt_aa, mt_pre_chn) {
+        return "select {~SNPpos1.CA};" + "label " +
+            wt + ":" + wt_chn + "_" + pos + wt_aa + ";" +
+            "set labeloffset -50 5; set labelfront; font label 18 serif bold;" +
+            "select {~SNPpos2.CA};" + "label " +
+            mt_cst + ":" + mt_cst_chn + "_" + pos + mt_aa + ";" +
+            "set labeloffset 50 -10; set labelfront;font label 18 serif bold;" +
+            "select {~SNPpos3.CA};" + "label " +
+            "PRE:" + mt_pre_chn + "_" + pos + mt_aa + ";" +
+            "set labeloffset 50 10; set labelfront;font label 18 serif bold;";
+    }
+
+    function ext(target, src) {
+        target.script = src.script;
+        return target;
+    }
+
+    function generate_title(target_id, _checked) {
+        var dic = {
+            "1.1": "WT: " + wt.toUpperCase(),
+            "2.1": "Crystal Mutant: " + mt_cst.toUpperCase(),
+            "3.1": "Predict Mutant"
+        };
+        var _checked_len = _checked.length;
+        switch (_checked_len) {
+            case 0:
+                document.getElementById(target_id).innerHTML = "Nothing Selected";
+                break;
+            case 1:
+                document.getElementById(target_id).innerHTML = dic[_checked[0]];
+                break;
+            case 2:
+                document.getElementById(target_id).innerHTML = "Superposition " + dic[_checked[0]] + " and " + dic[_checked[1]];
+                break;
+            case 3:
+                document.getElementById(target_id).innerHTML = "Display All";
+                break;
+
+        }
+    }
+
+    function mutation_site_label(jmol_id) {
+        Jmol.script(jmol_id, ini_label);
+    }
+
+    function sa_scripts(_pos) {
+        return {
+            'A_SA': 'select {' + _pos + '/1.1}; isosurface A_SA ignore{not 1.1} solvent; color isosurface grey; color isosurface translucent 0.3;',
+            'B_SA': 'select {' + _pos + '/2.1}; isosurface B_SA ignore{not 2.1} solvent; color isosurface orange; color isosurface translucent 0.3;',
+            'C_SA': 'select {' + _pos + '/3.1}; isosurface C_SA ignore{not 3.1} solvent; color isosurface green; color isosurface translucent 0.3;'
+        }
+    }
+
+    var uniprot = "P09211",
+        wt = "9gss".toLowerCase(), wt_chn = "B",
+        mt_cst = "1px7".toLowerCase(), mt_cst_chn = "B",
+        wt_aa = 'ASP', mt_aa = 'GLU', pos = "152",
+        mt_pre_chn = wt_chn,
+        mt_pre = "./output_predicted/" + uniprot + "-" + wt + "-" + wt_chn + "-" + pos + mt_aa + ".sc.pdb";
+
+    const Info = {
+        // mutable
+        width: "100%", height: "100%",
+        j2sPath: "../jsmol/j2s", // this needs to point to where the j2s directory is.
+        jarPath: "../jsmol/java",// this needs to point to where the java directory is.
+        // immutable
+        debug: false,
+        color: "0xFFFFFF",
+        use: "HTML5",   // JAVA HTML5 WEBGL are all options
+        jarFile: "JmolAppletSigned.jar",
+        isSigned: true,
+        disableJ2SLoadMonitor: true,
+        disableInitialConsole: true,
+        allowJavaScript: true
+    };
+    const cavity_scripts = {
+        'A_cavity': 'select {*/1.1}; isosurface A_cavity cavity; color isosurface grey; color isosurface translucent 0.3;',
+        'B_cavity': 'select {*/2.1}; isosurface B_cavity cavity; color isosurface orange; color isosurface translucent 0.3;',
+        'C_cavity': 'select {*/3.1}; isosurface C_cavity cavity; color isosurface green; color isosurface translucent 0.3;'
+    };
+    const bkb = {
+        'Cα': 'select *.CA; backbone on; cartoon off; strands off;',
+        'Cartoon': 'select *.CA; backbone off; cartoon on; strands off;',
+        'Strands': 'select *.CA; backbone off; cartoon off; strands on;',
+        'Clear': 'select *.CA; backbone off; cartoon off; strands off;'
+    };
+    var _load = {script: load(wt, wt_chn, mt_cst, mt_cst_chn, mt_pre, mt_pre_chn, pos)};
+    var ini_label = generate_ini_label(wt, wt_chn, pos, wt_aa, mt_cst, mt_cst_chn, mt_aa, mt_pre_chn);
+    var SA_scripts_1 = sa_scripts(pos);
+    var SA_scripts_2 = sa_scripts(pos);
+
+    // initiate viewer 1
+    $(function () {
+        $('#appdiv1').html(Jmol.getAppletHtml('jmol1', ext(Info, _load)));
+        Jmol.script(jmol1, "hide 3.1;");
+        // add label
+        mutation_site_label(jmol1);
+    });
+    // initiate viewer 2
+    $(function () {
+        $('#appdiv2').html(Jmol.getAppletHtml('jmol2', ext(Info, _load)));
+        Jmol.script(jmol2, "hide 2.1;");
+        // add label
+        mutation_site_label(jmol2);
+    });
+</script>
+<div id="viewer_titles" class="row">
+    <div class="col-lg-6"><h2 id="comparison_1" style="text-align: center;"></h2></div>
+    <div class="col-lg-6"><h2 id="comparison_2" style="text-align: center;"></h2></div>
+</div>
+
+<div id="viewers" class="row" style="height: 700px;">
+    <div class="col-lg-6" id="appdiv1"
+         style="background-color: white; padding: 0 1% 0.5% 1%;height: 100%;"></div>
+    <div class="col-lg-6" id="appdiv2"
+         style="background-color: white; padding: 0 1% 0.5% 1%;height: 100%;"></div>
+</div>
+
+<div id="control-panels" class="row">
+    <div id="control_panel_1" class="col-lg-6"
+         style="background-color: wheat; min-height: 50%; height: auto; max-height: 100%; border: 1px dashed black; border-radius: 5px; padding: 10px;">
+        <ul class="nav nav-tabs">
+            <li class="dropdown"><a class="dropdown-toggle" data-toggle="dropdown" href="#">Background Colour<span
+                    class="caret"></span></a>
+                <ul class="dropdown-menu">
+                    <li><a href="#!" onClick="Jmol.script(jmol1, 'color background black;')">Black</a></li>
+                    <li><a href="#!" onClick="Jmol.script(jmol1, 'color background lightgrey;')">Lightgrey</a></li>
+                    <li><a href="#!" onClick="Jmol.script(jmol1, 'color background white;')">White</a></li>
+                </ul>
+            </li>
+            <li class="active"><a data-toggle="tab" href="#structure_model_1">Structure/Model</a></li>
+            <li><a data-toggle="tab" href="#Calpha_1">Backbone</a></li>
+            <li><a data-toggle="tab" href="#environment_residues_1">Environment Residues</a></li>
+            <li><a data-toggle="tab" href="#protein_surface_1">Surface</a></li>
+            <li><a data-toggle="tab" href="#control_1">Control</a></li>
+            <li><a data-toggle="tab" href="#animation_1">Animation</a></li>
+            <li><a data-toggle="tab" href="#console_1">Command Box</a></li>
+            <li><a data-toggle="tab" href="#savefig_1">Save Figure</a></li>
+        </ul>
+
+        <div class="tab-content">
+            <div id="structure_model_1" class="tab-pane fade in active">
+                <h3>Choose Structure and Model to Display:</h3>
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" value="" id="WT_1" checked>
+                    <label class="form-check-label" for="WT_1"> Wild Type Structure (Grey)</label>
+                </div>
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" value="" id="MC_1" checked>
+                    <label class="form-check-label" for="MC_1"> Mutant Crystal Structure (Orange)</label>
+                </div>
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" value="" id="PM_1">
+                    <label class="form-check-label" for="PM_1"> Mutant Predict Model (Green)</label>
+                </div>
+                <script>
+                    var checked_1 = [], ids_1 = ['#WT_1', '#MC_1', '#PM_1'];
+
+                    function display_1() {
+                        var cmd = (checked_1.length === 0) ? 'hide all' : 'hide {not ' + checked_1.join(' and not ') + '};';
+                        Jmol.script(jmol1, cmd);
+                    }
+
+                    function update_1() {
+                        checked_1.sort();
+                        display_1();
+                        generate_title('comparison_1', checked_1);
+                    }
+
+                    $(function () {
+                        // check status of the checkboxes when the page is loaded
+                        for (var i = 0; i < 3; i++) {
+                            if ($(ids_1[i]).is(':checked')) {
+                                checked_1.push(i + 1.1)
+                            }
+                        }
+                        checked_1.sort();
+                        display_1();
+                        generate_title('comparison_1', checked_1);
+                        // detect checkboxes changes
+                        $(ids_1[0]).click(function () {
+                            if ($(this).is(':checked')) checked_1.push(1.1);
+                            else checked_1.splice(checked_1.indexOf(1.1), 1);
+                            update_1();
+                        });
+                        $(ids_1[1]).click(function () {
+                            if ($(this).is(':checked')) checked_1.push(2.1);
+                            else checked_1.splice(checked_1.indexOf(2.1), 1);
+                            update_1();
+                        });
+                        $(ids_1[2]).click(function () {
+                            if ($(this).is(':checked')) checked_1.push(3.1);
+                            else checked_1.splice(checked_1.indexOf(3.1), 1);
+                            update_1();
+                        })
+                    });
+                </script>
+            </div>
+
+            <div id="Calpha_1" class="tab-pane fade">
+                <h3>Show Backbone as (Select One):</h3>
+                <div class="form-group row">
+                    <div class="col-lg-2">
+                        <select class="form-control" id="bkbone_display_1">
+                            <option value="">Cα</option>
+                            <option value="" selected>Cartoon</option>
+                            <option value="">Strands</option>
+                            <option value="">Clear</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-lg-2" style="text-align:left; width: auto;">Transparency:</div>
+                    <div class="col-lg-3" style="padding: 4.4px 0 0 0;">
+                        <input type="range" min="0" max="1.0" value="0.70" step="0.01" class="slider" id="transparency_1">
+                    </div>
+                    <div class="col-lg-1" style="width: auto;"><p id="demo_1"></p></div>
+                </div>
+                <script>
+                    var slider_1 = $('#transparency_1'), output_1 = $('#demo_1');
+                    var bkbone_1 = $('#bkbone_display_1').find('option:selected').text();
+                    $(function () {
+                        Jmol.script(jmol1, bkb[bkbone_1]);
+                        $('#bkbone_display_1').on('change', function () {
+                            bkbone_1 = $(this).find('option:selected').text();
+                            var transparency_1 = $('#transparency_1').val();
+                            if (transparency_1 === "1") Jmol.script(jmol1, '{0} off;'.format(bkbone_1));
+                            else Jmol.script(jmol1, 'color {0} translucent {1};'.format(bkbone_1, transparency_1));
+                            Jmol.script(jmol1, bkb[bkbone_1]);
+                        })
+                    });
+                    output_1.text(slider_1.val());
+                    slider_1.on('input change', function () {
+                        var transparency_1 = slider_1.val();
+                        output_1.text(transparency_1);
+                        var bkbone = $('#bkbone_display_1').find('option:selected').text();
+                        if (bkbone !== 'Clear') {
+                            Jmol.script(jmol1, 'select *.CA;' + 'colour ' + bkbone + ' translucent ' + transparency_1)
+                        }
+                        if (transparency_1 === "1") {
+                            Jmol.script(jmol1, bkbone + ' off;')
+                        }
+                    });
+                </script>
+            </div>
+
+            <div id="environment_residues_1" class="tab-pane fade">
+                <h3>Show Environment Residues:</h3>
+                <div id="show_env_res_1">
+                    <div class="col-lg-12">
+                        <input type="number" class="col-lg-1" id="dist_1" min="0" placeholder="5 Angstrom"
+                               style="width: auto;">
+                        <small class="text-muted col-lg-2" id="input_help_text_1"
+                               style="padding: 10px 0 0 5px; vertical-align: bottom; width: auto; margin-right: 5px;">
+                            unit: Angstrom
+                        </small>
+                        <button class="btn btn-default" id="clear_env_res_1">Clear</button>
+                    </div>
+                    <div class="form-check row">
+                        <div class="col-lg-5" style="margin-bottom: 0;">
+                            <input class="form-check-input" type="checkbox" value="" id="show_env_res_labels_1">
+                            <label class="form-check-label" for="show_env_res_labels_1"> Show Atom Label</label>
+                            <small class="text-muted" id="Label_format_1">(Format: [amino_acid]res_num)</small>
+                        </div>
+                    </div>
+                </div>
+                <script>
+                    var label_format_1 = "[%n]%r;";
+                    $("#dist_1").on('change', function () {
+                        $(this).data('val', $(this).val());
+                        var cmd = "select {within(" + $(this).val() + ", ~SNPpos)}; wireframe 0.1;" +
+                            "colour {oxygen and selected} red; colour {nitrogen and selected} blue;";
+                        if ($('#show_env_res_labels_1').is(':checked')) cmd += "label " + label_format_1;
+                        Jmol.script(jmol1, cmd);
+                        mutation_site_label(jmol1);
+                    });
+
+                    $('#dist_1').on('input', function () {
+                        var prev = $(this).data('val');
+                        var current = $(this).val();
+                        var cmd_to_hide = "select {within(" + prev + ", ~SNPpos)}; wireframe 0;";
+                        var cmd = "select {within(" + current + ", ~SNPpos)}; wireframe 0.1;" +
+                            "colour {oxygen and selected} red; colour {nitrogen and selected} blue;";
+                        if ($('#show_env_res_labels_1').is(':checked')) cmd += "label " + label_format_1;
+                        cmd_to_hide += "label off;";
+                        Jmol.script(jmol1, cmd_to_hide + cmd);
+                        mutation_site_label(jmol1);
+                    });
+
+                    $('#clear_env_res_1').on('click', function () {
+                        var prev = $('#dist_1').data('val');
+                        var cmd_to_hide = "select {within(" + prev + ", ~SNPpos) and not ~SNPpos}; wireframe 0; label off";
+                        Jmol.script(jmol1, cmd_to_hide);
+                        mutation_site_label(jmol1);
+                        $('#dist_1').val(0);
+                    });
+
+                    $('#show_env_res_labels_1').on('click', function () {
+                        var status;
+                        if ($(this).is(':checked')) status = label_format_1;
+                        else status = 'OFF';
+                        var _cmd = "select {within(" + $('#dist_1').val() + ", ~SNPpos)}; label " + status + ";";
+                        Jmol.script(jmol1, _cmd);
+                        mutation_site_label(jmol1);
+                    });
+                </script>
+
+                <h3>Find Polar Contacts:</h3>
+                <div id="find_polar_contacts_1">
+                    <div class="row">
+                        <div class="col-lg-12">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" value="" id="side_only_1" checked>
+                                <label class="form-check-label" for="side_only_1">Side Chain Only</label>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-lg-12">
+                            <p class="col-lg-2" style="padding: 0 0 0 10px;margin-right: 10px; width: auto;">Contact
+                                range:</p>
+                            <input type="number" class="col-lg-2" placeholder="0.0" min="0" max="5.0" step="0.1"
+                                   id="lower_limit_1" style="padding: 0 0 0 10px; width: auto;">
+                            <p class="col-lg-1" style="width: auto; text-align: center;">~</p>
+                            <input type="number" class="col-lg-1" placeholder="4.0" min="0" max="5.0" step="0.1"
+                                   id="upper_limit_1" style="padding: 0 0 0 10px; width: auto;">
+                            <button type="button" class="btn btn-success"
+                                    style="font-size: 12px; padding: 1px 3px 1px 3px; margin-left: 10px; height: 20px"
+                                    id="measure_btn_1">Measure
+                            </button>
+                            <button type="button" class="btn btn-default"
+                                    style="font-size: 12px; padding: 1px 3px 1px 3px; margin-left: 5px; height: 20px"
+                                    id="clear_btn_1">Clear
+                            </button>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-lg-4">
+                            <small class="text-muted">(Default range 2.2 ~ 3.5 Angstrom)</small>
+                        </div>
+                    </div>
+                    <script>
+                        var lower_1 = 2.2, upper_1 = 3.5, measure_cmd_1 = "define ~nearSNP {within(5, ~SNPpos)};";
+                        $(function () {
+                            $('#lower_limit_1').val(2.2);
+                            $('#upper_limit_1').val(3.5);
+                        });
+
+                        function check_boundary_1(_val) {
+                            return !(_val < 0.0 || _val > 5.0);
+                        }
+
+                        $('#lower_limit_1').on('input change', function () {
+                            var _tmp = $(this).val();
+                            if (check_boundary_1(_tmp)) lower_1 = _tmp;
+                            else alert('Invalid input. Effective range is between 0.0 and 5.0. Please try again.;');
+                        });
+                        $('#upper_limit_1').on('input change', function () {
+                            var _tmp = $(this).val();
+                            if (check_boundary_1(_tmp)) upper_1 = _tmp;
+                            else alert('Invalid input. Effective range is between 0.0 and 5.0. Please try again.;');
+                        });
+                        $('#measure_btn_1').on('click', function () {
+                            var cmd;
+                            if ($('#side_only_1').is(':checked')) {
+                                cmd = "measure delete; measure range {0} {1} ((oxygen or nitrogen) and ~SNPpos and not backbone) ((oxygen or nitrogen) and ~nearSNP and not ~SNPpos);".format(lower_1, upper_1);
+                            } else {
+                                cmd = "measure delete; measure range {0} {1} ((oxygen or nitrogen) and ~SNPpos) ((oxygen or nitrogen) and ~nearSNP and not ~SNPpos);".format(lower_1, upper_1);
+                            }
+                            Jmol.script(jmol1, measure_cmd_1 + cmd);
+
+                            var dist_1 = $('#dist_1');
+                            if (dist_1.val() === '' || dist_1.val() < 5.0) {
+                                dist_1.val(5);
+                                dist_1.data('val', 5);
+                                Jmol.script(jmol1,
+                                    "select {within(" + 5 + ", ~SNPpos)}; wireframe 0.1;" +
+                                    "colour {oxygen and selected} red; colour {nitrogen and selected} blue;")
+                            }
+                        });
+                        $('#clear_btn_1').on('click', function () {
+                            Jmol.script(jmol1, 'measure off;')
+                        });
+                    </script>
+                </div>
+
+            </div>
+
+            <div id="protein_surface_1" class="tab-pane fade">
+                <h3>Show Protein Surface Cavity:</h3>
+                <form>
+                    <label class="checkbox-inline">
+                        <input type="checkbox" value="" id="WT_cavity_1">Wild Type (Grey)</label>
+                    <label class="checkbox-inline">
+                        <input type="checkbox" value="" id="CM_cavity_1">Mutant Crystal (Orange)</label>
+                    <label class="checkbox-inline">
+                        <input type="checkbox" value="" id="PM_cavity_1">Mutant Predict (Green)</label>
+                </form>
+                <div class="row">
+                    <div class="col-lg-12">
+                        <button class="btn btn-default" id="show_cavity_1">Show Cavity</button>
+                        <button class="btn btn-default" id="hide_cavity_1">Hide Cavity</button>
+                    </div>
+                </div>
+
+                <div id="Cav_div_1" style="display: none;">
+                    <h5>Cavity Transparency</h5>
+                </div>
+                <div class="col-lg-12" id="WT_Cav_div_1" style="display: none;">
+                    <div class="col-lg-2" style="text-align:right; width: auto;">
+                        Wild Type:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+                    </div>
+                    <div class="col-lg-3" style="padding: 4.4px 0 0 0;">
+                        <input type="range" min="0" max="1.0" value="0.30" step="0.01" class="slider"
+                               id="WT_Cav_Tr_1">
+                    </div>
+                    <div class="col-lg-1" style="width: auto;"><p id="WT_Cav_Tr_Val_1"></p></div>
+                </div>
+                <div class="col-lg-12" id="CM_Cav_div_1" style="display: none;">
+                    <div class="col-lg-2" style="text-align:right;width: auto;">Mutant Crystal:</div>
+                    <div class="col-lg-3" style="padding: 4.4px 0 0 0;">
+                        <input type="range" min="0" max="1.0" value="0.30" step="0.01" class="slider"
+                               id="CM_Cav_Tr_1">
+                    </div>
+                    <div class="col-lg-1" style="width: auto;"><p id="CM_Cav_Tr_Val_1"></p></div>
+                </div>
+                <div class="col-lg-12" id="PM_Cav_div_1" style="display: none;">
+                    <div class="col-lg-2" style="text-align:right;width: auto;">Mutant Predict:</div>
+                    <div class="col-lg-3" style="padding: 4.4px 0 0 0;">
+                        <input type="range" min="0" max="1.0" value="0.30" step="0.01" class="slider"
+                               id="PM_Cav_Tr_1">
+                    </div>
+                    <div class="col-lg-1" style="width: auto;"><p id="PM_Cav_Tr_Val_1"></p></div>
+                </div>
+
+                <h3>Show Variant Site Solvent Accessibility:</h3>
+                <form>
+                    <label class="checkbox-inline">
+                        <input type="checkbox" value="" id="WT_SA_1">Wild Type (Grey)</label>
+                    <label class="checkbox-inline">
+                        <input type="checkbox" value="" id="CM_SA_1">Mutant Crystal (Orange)</label>
+                    <label class="checkbox-inline">
+                        <input type="checkbox" value="" id="PM_SA_1">Mutant Predict (Green)</label>
+                </form>
+                <div class="row">
+                    <div class="col-lg-12">
+                        <button class="btn btn-default" id="show_SA_1">Show Solvent Accessibility</button>
+                        <button class="btn btn-default" id="hide_SA_1">Hide Solvent Accessibility</button>
+                    </div>
+                </div>
+
+                <div id="SA_div_1" style="display: none;">
+                    <h5>Solvent Accessibility Transparency</h5>
+                </div>
+                <div class="col-lg-12" id="WT_SA_div_1" style="display: none;">
+                    <div class="col-lg-2" style="text-align:right; width: auto;">
+                        Wild Type:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+                    </div>
+                    <div class="col-lg-3" style="padding: 4.4px 0 0 0;">
+                        <input type="range" min="0" max="1.0" value="0.30" step="0.01" class="slider"
+                               id="WT_SA_Tr_1">
+                    </div>
+                    <div class="col-lg-1" style="width: auto;"><p id="WT_SA_Tr_Val_1"></p></div>
+                </div>
+                <div class="col-lg-12" id="CM_SA_div_1" style="display: none;">
+                    <div class="col-lg-2" style="text-align:right;width: auto;">Mutant Crystal:</div>
+                    <div class="col-lg-3" style="padding: 4.4px 0 0 0;">
+                        <input type="range" min="0" max="1.0" value="0.30" step="0.01" class="slider"
+                               id="CM_SA_Tr_1">
+                    </div>
+                    <div class="col-lg-1" style="width: auto;"><p id="CM_SA_Tr_Val_1"></p></div>
+                </div>
+                <div class="col-lg-12" id="PM_SA_div_1" style="display: none;">
+                    <div class="col-lg-2" style="text-align:right;width: auto;">Mutant Predict:</div>
+                    <div class="col-lg-3" style="padding: 4.4px 0 0 0;">
+                        <input type="range" min="0" max="1.0" value="0.30" step="0.01" class="slider"
+                               id="PM_SA_Tr_1">
+                    </div>
+                    <div class="col-lg-1" style="width: auto;"><p id="PM_SA_Tr_Val_1"></p></div>
+                </div>
+
+                <h5>Usefull Links</h5>
+                <a href="https://chemapps.stolaf.edu/jmol/docs/#isosurface">Jmol/Jsmol Interactive Scripting
+                    Documentation
+                    Isosurface</a> |
+                <a href="http://jmol.sourceforge.net/docs/surface/">Jmol surface</a> |
+
+                <script>
+                    var cavity_checked_1 = [], cavity_ids_1 = ['#WT_cavity_1', '#CM_cavity_1', '#PM_cavity_1'],
+                        cavity_called_1 = [false, false, false];
+                     $('#show_cavity_1').on('click', function () {
+                        Jmol.script(jmol1, 'echo "Processing ..."; refresh;');
+                        cavity_checked_1 = [];
+                        for (var i = 0; i < 3; i++) {
+                            if ($(cavity_ids_1[i]).is(':checked')) {
+                                cavity_checked_1.push(i + 1.1)
+                            }
+
+                            if (cavity_checked_1.length > 0) {
+                                $('#Cav_div_1').css('display', 'block');
+
+                                if (cavity_checked_1.indexOf(1.1) >= 0) {
+                                    $('#WT_Cav_div_1').css('display', 'block');
+                                    if (cavity_called_1[0] === true) {
+                                        Jmol.script(jmol1, "isosurface A_cavity on;")
+                                    } else {
+                                        Jmol.script(jmol1, cavity_scripts.A_cavity);
+                                        cavity_called_1[0] = true;
+                                    }
+                                } else {
+                                    $('#WT_Cav_div_1').css('display', 'none');
+                                    if (cavity_called_1[0] === true) {
+                                        Jmol.script(jmol1, "isosurface A_cavity off;")
+                                    }
+                                }
+
+                                if (cavity_checked_1.indexOf(2.1) >= 0) {
+                                    $('#CM_Cav_div_1').css('display', 'block');
+                                    if (cavity_called_1[1] === true) {
+                                        Jmol.script(jmol1, "isosurface B_cavity on;")
+                                    } else {
+                                        Jmol.script(jmol1, cavity_scripts.B_cavity);
+                                        cavity_called_1[1] = true;
+                                    }
+                                } else {
+                                    $('#CM_Cav_div_1').css('display', 'none');
+                                    if (cavity_called_1[1] === true) {
+                                        Jmol.script(jmol1, "isosurface B_cavity off;")
+                                    }
+                                }
+
+                                if (cavity_checked_1.indexOf(3.1) >= 0) {
+                                    $('#PM_Cav_div_1').css('display', 'block');
+                                    if (cavity_called_1[2] === true) {
+                                        Jmol.script(jmol1, "isosurface C_cavity on;")
+                                    } else {
+                                        Jmol.script(jmol1, cavity_scripts.C_cavity);
+                                        cavity_called_1[2] = true;
+                                    }
+                                } else {
+                                    $('#PM_Cav_div_1').css('display', 'none');
+                                    if (cavity_called_1[2] === true) {
+                                        Jmol.script(jmol1, "isosurface C_cavity off;")
+                                    }
+                                }
+                            } else {
+                                $('#Cav_div_1').css('display', 'none');
+                                $('#WT_Cav_div_1').css('display', 'none');
+                                $('#CM_Cav_div_1').css('display', 'none');
+                                $('#PM_Cav_div_1').css('display', 'none');
+                                if (cavity_called_1[0] === true) {
+                                    Jmol.script(jmol1, "isosurface A_cavity off;")
+                                }
+                                if (cavity_called_1[1] === true) {
+                                    Jmol.script(jmol1, "isosurface B_cavity off;")
+                                }
+                                if (cavity_called_1[2] === true) {
+                                    Jmol.script(jmol1, "isosurface C_cavity off;")
+                                }
+                            }
+                        }
+                        Jmol.script(jmol1, "echo;")
+                    });
+                    $('#hide_cavity_1').on('click', function () {
+                        $('#Cav_div_1').css('display', 'none');
+                        $('#WT_Cav_div_1').css('display', 'none');
+                        $('#CM_Cav_div_1').css('display', 'none');
+                        $('#PM_Cav_div_1').css('display', 'none');
+                        $('#WT_cavity_1').attr('checked', false);
+                        $('#CM_cavity_1').attr('checked', false);
+                        $('#PM_cavity_1').attr('checked', false);
+                        Jmol.script(jmol1, "isosurface A_cavity off; isosurface B_cavity off; isosurface C_cavity off;")
+                    });
+                    //
+                    var WT_Cav_Tr_1 = 0.30, CM_Cav_Tr_1 = 0.30, PM_Cav_Tr_1 = 0.30;
+                    var WT_SA_Tr_1 = 0.30, CM_SA_Tr_1 = 0.30, PM_SA_Tr_1 = 0.30;
+                    $(function () {
+                        $('#WT_Cav_Tr_Val_1').text(0.30);
+                        $('#CM_Cav_Tr_Val_1').text(0.30);
+                        $('#PM_Cav_Tr_Val_1').text(0.30);
+                        $('#WT_SA_Tr_Val_1').text(0.30);
+                        $('#CM_SA_Tr_Val_1').text(0.30);
+                        $('#PM_SA_Tr_Val_1').text(0.30);
+                    });
+                    $('#WT_Cav_Tr_1').on('change', function () {
+                        WT_Cav_Tr_1 = $(this).val();
+                        Jmol.script(jmol1, "isosurface A_cavity translucent {0};".format(WT_Cav_Tr_1));
+                        $('#WT_Cav_Tr_Val_1').text(WT_Cav_Tr_1);
+                    });
+                    $('#CM_Cav_Tr_1').on('change', function () {
+                        CM_Cav_Tr_1 = $(this).val();
+                        Jmol.script(jmol1, "isosurface B_cavity translucent {0};".format(CM_Cav_Tr_1));
+                        $('#CM_Cav_Tr_Val_1').text(CM_Cav_Tr_1);
+                    });
+                    $('#PM_Cav_Tr_1').on('change', function () {
+                        PM_Cav_Tr_1 = $(this).val();
+                        Jmol.script(jmol1, "isosurface C_cavity translucent {0};".format(PM_Cav_Tr_1));
+                        $('#PM_Cav_Tr_Val_1').text(PM_Cav_Tr_1);
+                    });
+                    $('#WT_SA_Tr_1').on('change', function () {
+                        WT_SA_Tr_1 = $(this).val();
+                        Jmol.script(jmol1, "isosurface A_SA translucent {0};".format(WT_SA_Tr_1));
+                        $('#WT_SA_Tr_Val_1').text(WT_SA_Tr_1);
+                    });
+                    $('#CM_SA_Tr_1').on('change', function () {
+                        CM_SA_Tr_1 = $(this).val();
+                        Jmol.script(jmol1, "isosurface B_SA translucent {0};".format(CM_SA_Tr_1));
+                        $('#CM_SA_Tr_Val_1').text(CM_SA_Tr_1);
+                    });
+                    $('#PM_SA_Tr_1').on('change', function () {
+                        PM_SA_Tr_1 = $(this).val();
+                        Jmol.script(jmol1, "isosurface C_SA translucent {0};".format(PM_SA_Tr_1));
+                        $('#PM_SA_Tr_Val_1').text(PM_SA_Tr_1);
+                    });
+                    //
+                    var SA_checked_1 = [], SA_ids_1 = ['#WT_SA_1', '#CM_SA_1', '#PM_SA_1'],
+                        SA_called_1 = [false, false, false];
+                    $('#show_SA_1').on('click', function () {
+                        Jmol.script(jmol1, 'echo "Processing ..."; refresh;');
+                        SA_checked_1 = [];
+                        for (var i = 0; i < 3; i++) {
+                            if ($(SA_ids_1[i]).is(':checked')) {
+                                SA_checked_1.push(i + 1.1)
+                            }
+                        }
+
+                        if (SA_checked_1.length > 0) {
+                            $('#SA_div_1').css('display', 'block');
+
+                            if (SA_checked_1.indexOf(1.1) >= 0) {
+                                $('#WT_SA_div_1').css('display', 'block');
+                                if (SA_called_1[0] === true) {
+                                    Jmol.script(jmol1, "isosurface A_SA on;")
+                                }
+                                else {
+                                    Jmol.script(jmol1, SA_scripts_1.A_SA)
+                                    SA_called_1[0] = true;
+                                }
+                            } else {
+                                $('#WT_SA_div_1').css('display', 'none');
+                                if (SA_called_1[0] === true) {
+                                    Jmol.script(jmol1, "isosurface A_SA off;")
+                                }
+                            }
+
+                            if (SA_checked_1.indexOf(2.1) >= 0) {
+                                $('#CM_SA_div_1').css('display', 'block');
+                                if (SA_called_1[1] === true) {
+                                    Jmol.script(jmol1, "isosurface B_SA on;")
+                                }
+                                else {
+                                    Jmol.script(jmol1, SA_scripts_1.B_SA)
+                                    SA_called_1[1] = true;
+                                }
+                            } else {
+                                $('#CM_SA_div_1').css('display', 'none');
+                                if (SA_called_1[1] === true) {
+                                    Jmol.script(jmol1, "isosurface B_SA off;")
+                                }
+                            }
+
+                            if (SA_checked_1.indexOf(3.1) >= 0) {
+                                $('#PM_SA_div_1').css('display', 'block');
+                                if (SA_called_1[2] === true) {
+                                    Jmol.script(jmol1, "isosurface C_SA on;")
+                                }
+                                else {
+                                    Jmol.script(jmol1, SA_scripts_1.C_SA)
+                                    SA_called_1[2] = true;
+                                }
+                            } else {
+                                $('#PM_SA_div_1').css('display', 'none');
+                                if (SA_called_1[2] === true) {
+                                    Jmol.script(jmol1, "isosurface C_SA off;")
+                                }
+                            }
+                            Jmol.script(jmol1, "echo;")
+                        } else {
+                            $('#SA_div_1').css('display', 'none');
+                            Jmol.script(jmol1, "echo;");
+                        }
+                    });
+                    $('#hide_SA_1').on('click', function () {
+                        $('#SA_div_1').css('display', 'none');
+                        $('#WT_SA_div_1').css('display', 'none');
+                        $('#CM_SA_div_1').css('display', 'none');
+                        $('#PM_SA_div_1').css('display', 'none');
+                        $('#WT_SA_1').attr('checked', false);
+                        $('#CM_SA_1').attr('checked', false);
+                        $('#PM_SA_1').attr('checked', false);
+                        Jmol.script(jmol1, "isosurface A_SA off; isosurface B_SA off; isosurface C_SA off;")
+                    })
+                </script>
+            </div>
+
+            <div id="animation_1" class="tab-pane fade">
+                <h3>Fancy Animations? Make the Models Spin:</h3>
+                <div class="row" style="padding: 7px 0 7px 10px;">
+                    <strong>Spin:</strong>
+                </div>
+                <div class="form-group row">
+                    <div class="col-lg-12">
+                        <button type="button" class="btn btn-default" id="spin_x_1">Spin X</button>
+                        <button type="button" class="btn btn-default" id="spin_y_1">Spin Y</button>
+                        <button type="button" class="btn btn-default" id="spin_z_1">Spin Z</button>
+                        <button type="button" class="btn btn-default" id="stop_spin_1">Stop</button>
+                    </div>
+                </div>
+                <div class="form-group row" style="margin-left: 5px;margin-bottom: 0;">
+                    <div class="col-lg-1" style="padding-left: 10px;">Speed:</div>
+                    <div class="col-lg-3" style="padding: 4.4px 0 0 0;"><input type="range" min="1" max="100" value="3"
+                                                                               step="1" class="slider"
+                                                                               id="spin_speed_1">
+                    </div>
+                    <div class="col-lg-1" style="padding: 1px 0 0 15px; width: auto;"><p id="speed_1"></p></div>
+                </div>
+
+                <script>
+                    var speed_1, clicked_1;
+                    $(function () {
+                        speed_1 = $('#spin_speed_1').val();
+                        $('#speed_1').text(speed_1);
+                    });
+                    $('#spin_x_1').on('click', function () {
+                        Jmol.script(jmol1, "set spinX " + speed_1 + "; set spinY 0; set spinZ 0; spin on;");
+                        clicked_1 = 'X';
+                    });
+                    $('#spin_y_1').on('click', function () {
+                        Jmol.script(jmol1, "set spinY " + speed_1 + "; set spinX 0; set spinZ 0; spin on;");
+                        clicked_1 = 'Y';
+                    });
+                    $('#spin_z_1').on('click', function () {
+                        Jmol.script(jmol1, "set spinZ " + speed_1 + "; set spinX 0; set spinY 0; spin on;");
+                        clicked_1 = 'Z';
+                    });
+
+                    $('#spin_speed_1').on('change', function () {
+                        speed_1 = $(this).val();
+                        $('#speed_1').text(speed_1);
+                        var cmd;
+                        switch (clicked_1) {
+                            case 'X':
+                                cmd = "set spin" + "X " + speed_1 + "; set spinY 0; set spinZ 0;";
+                                break;
+                            case 'Y':
+                                cmd = "set spin" + "Y " + speed_1 + "; set spinX 0; set spinZ 0;";
+                                break;
+                            case 'Z':
+                                cmd = "set spin" + "Z " + speed_1 + "; set spinX 0; set spinY 0;";
+                                break;
+                        }
+                        Jmol.script(jmol1, cmd);
+                    });
+                    $('#stop_spin_1').on('click', function () {
+                        Jmol.script(jmol1, 'spin off;');
+                    });
+                </script>
+            </div>
+
+            <div id="control_1" class="tab-pane fade">
+                <h3>Don't Have a Mouse? Try Our Control Panel:</h3>
+                <h5>Center at</h5>
+                <div class="row">
+                    <div class="col-lg-12">
+                        <button class="btn btn-default" id="Mutation_Site_1">Variant Site</button>
+                        <button class="btn btn-default" id="Protein_1">Whole Protein</button>
+                    </div>
+                </div>
+                <h5>Rotation</h5>
+                <div class="row">
+                    <div class="col-lg-12" style="padding: 0 0 0 10px; margin-bottom: 6px;">
+                        <button id="rotate_x_45_1" class="btn btn-default">Rotate X 45&#176;</button>
+                        <button id="rotate_y_45_1" class="btn btn-default">Rotate Y 45&#176;</button>
+                        <button id="rotate_z_45_1" class="btn btn-default">Rotate Z 45&#176;</button>
+                        <small class="text-muted" id="rotate_help_text_1"
+                               style="padding-left: 5px; vertical-align: bottom">
+                            Rotate anti-clockwise
+                        </small>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-lg-12" style="padding: 0 0 0 10px; margin-bottom: 6px;">
+                        <div class="col-lg-1" style="padding:0">
+                            <input type="number" class="form-control" id="degrees_1" placeholder="5"
+                                   style="padding:0 0 0 10px">
+                        </div>
+                        <div class="col-lg-4" style="width: auto;">
+                            <button id="rotate_x_1" class="btn btn-default">Rotate by X</button>
+                            <button id="rotate_y_1" class="btn btn-default">Rotate by Y</button>
+                            <button id="rotate_z_1" class="btn btn-default">Rotate by Z</button>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-lg-12">
+                            <div class="col-lg-5">
+                                <small id="rotateby_help_text_1" class="text-muted"
+                                       style="padding-left: 5px; vertical-align: bottom">
+                                    Positive number: anti-clockwise rotation; Negative number: clockwise rotation;
+                                </small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <h5>Zoom</h5>
+                <div class="row">
+                    <div class="col-lg-12" style="padding: 0 0 0 10px">
+                        <button id="zoomin_1" class="btn btn-default">Zoom In</button>
+                        <button id="zoomout_1" class="btn btn-default">Zoom Out</button>
+                    </div>
+                </div>
+                <script>
+                    var degrees_1 = 5;
+                    $('#degrees_1').on('change', function () {
+                        degrees_1 = $(this).val();
+                    });
+                    $('#Mutation_Site_1').on('click', function () {
+                        Jmol.script(jmol1, 'center ~SNPpos;');
+                    });
+                    $('#Protein_1').on('click', function () {
+                        Jmol.script(jmol1, 'center all;');
+                    });
+                    $('#rotate_x_1').on('click', function () {
+                        Jmol.script(jmol1, "rotate x {0};".format(degrees_1))
+                    });
+                    $('#rotate_y_1').on('click', function () {
+                        Jmol.script(jmol1, "rotate y {0};".format(degrees_1))
+                    });
+                    $('#rotate_z_1').on('click', function () {
+                        Jmol.script(jmol1, "rotate z {0};".format(degrees_1))
+                    });
+                    $('#rotate_x_45_1').on('click', function () {
+                        Jmol.script(jmol1, "rotate x 45;")
+                    });
+                    $('#rotate_y_45_1').on('click', function () {
+                        Jmol.script(jmol1, "rotate y 45;")
+                    });
+                    $('#rotate_z_45_1').on('click', function () {
+                        Jmol.script(jmol1, "rotate z 45;")
+                    });
+                    $('#zoomin_1').on('click', function () {
+                        Jmol.script(jmol1, "zoom in;")
+                    });
+                    $('#zoomout_1').on('click', function () {
+                        Jmol.script(jmol1, "zoom out;")
+                    });
+                </script>
+            </div>
+
+            <div id="console_1" class="tab-pane fade">
+                <h3>Jmol Command Input:</h3>
+                <div class="col-lg-12" style="padding: 0 0 0 10px; margin-bottom: 6px;">
+                    <div class="col-lg-4" style="width: auto;">
+                        <textarea class="longInput" id="cmdArea_1" cols="50" rows="7" style="overflow-y: scroll;"
+                                  placeholder="User command input."></textarea>
+                    </div>
+                    <div class="col-lg-2" style="height: auto; padding: 0; width: auto;">
+                        <button class="btn btn-success" id="cmd_apply_1" style="margin-top: 5px;">Apply</button>
+                        <br>
+                        <button class="btn btn-default" id="cmd_undo_1" style="margin-top: 5px;">Undo</button>
+                        <br>
+                        <button class="btn btn-default" id="cmd_redo_1" style="margin-top: 5px;">Redo</button>
+                    </div>
+                    <div class="col-lg-1">
+                        <button class="btn btn-primary" id="reset_1" style="margin-top: 5px;">Reset</button>
+                    </div>
+                </div>
+                <h3>Command History:</h3>
+                <div class="col-lg-12">
+                    <div class="col-lg-4" style="width: auto;">
+                        <textarea id="cmdHistory_1" cols="50" rows="5"
+                                  style="overflow-y: scroll;background-color: wheat; border: none;"
+                                  placeholder="Input command history will appear here." disabled></textarea>
+                    </div>
+                    <div class="col-lg-2" style="height: auto; padding: 0; width: auto;">
+                        <button class="btn btn-default" id="clear_cmd_history_1"
+                                style="height: auto; width: auto; resize: none;">Clear History
+                        </button>
+                    </div>
+                </div>
+                <h5>Usefull Links</h5>
+                <a href="https://chemapps.stolaf.edu/jmol/docs/">Jmol/JSmol Interactive Scripting Documentation</a> |
+                &nbsp;
+                <a href="http://jmol.sourceforge.net/docs/">Jmol Documentation</a> | &nbsp;
+                <a href="http://jmol.sourceforge.net/demo/">Demonstration of Jmol Capabilities</a> | &nbsp;
+                <a href="http://wiki.jmol.org/index.php/Main_Page">Jmol Wiki</a>
+                <script>
+                    var cmd_input_1, cmd_array_1 = [_load.script + ini_label + "hide 3.1;"], cmd_undone_1 = [];
+                    $('#cmdArea_1').on('input change', function () {
+                        cmd_input_1 = $(this).val()
+                    });
+                    $('#cmd_apply_1').on('click', function () {
+                        // avoid empty input
+                        if (cmd_input_1 === "") {
+                            alert("Command input is empty, type in commands before apply.");
+                        }
+                        else {
+                            var Ret = Jmol.scriptWaitAsArray(jmol1, cmd_input_1);
+                            if ((Ret + "").indexOf("ERROR") >= 0) {
+                                alert("Invalid Jmol comands. " + Ret[0][0][3].replace(/\|/g, "\n"));
+                            }
+                            else {
+                                cmd_input_1 = cmd_input_1.trim();
+                                cmd_input_1 = cmd_input_1.replace("\n", "; ");
+                                if (cmd_input_1.trim().charAt(cmd_input_1.length - 1) !== ";") {
+                                    cmd_input_1 += ";"
+                                }
+                                Jmol.script(jmol1, cmd_input_1);
+                                cmd_array_1.push(cmd_input_1);
+                                $('#cmdHistory_1').val(cmd_array_1.slice(1, cmd_array_1.length).join('\n'));
+                                $('#cmdArea_1').val("");
+                                cmd_input_1 = "";
+                            }
+                        }
+                    });
+                    $('#cmd_undo_1').on('click', function () {
+                        if (cmd_array_1.length === 1) {
+                            alert("Cannot not do undo, there are no history commands to undo.");
+                        } else {
+                            cmd_undone_1.push(cmd_array_1.pop());
+                            $('#cmdHistory_1').val(cmd_array_1.slice(1, cmd_array_1.length).join(' '));
+                            Jmol.script(jmol1, cmd_array_1.join(' '))
+                        }
+                    });
+                    $('#cmd_redo_1').on('click', function () {
+                        if (cmd_undone_1.length === 0) {
+                            alert("There is no more commands to redo.");
+                        } else {
+                            var redo = cmd_undone_1.pop();
+                            cmd_array_1.push(redo);
+                            $('#cmdHistory_1').val(cmd_array_1.slice(1, cmd_array_1.length).join('\n'));
+                            Jmol.script(jmol1, redo);
+                        }
+                    });
+                    $('#reset_1').on('click', function () {
+                        var reset_confirm = confirm("Are you sure to reset the viewer? It will clear the command history and cannot be undone.");
+                        if (reset_confirm === true) {
+                            cavity_called_1 = [false, false, false];
+                            SA_called_1 = [false, false, false];
+                            _load = {script: load(wt, wt_chn, mt_cst, mt_cst_chn, mt_pre, mt_pre_chn, pos)};
+                            ini_label = generate_ini_label(wt, wt_chn, pos, wt_aa, mt_cst, mt_cst_chn, mt_aa, mt_pre_chn);
+                            SA_scripts_1 = sa_scripts(pos);
+
+                            $('#appdiv1').html(Jmol.getAppletHtml('jmol1', ext(Info, _load)));
+                            Jmol.script(jmol1, "hide 3.1;");
+                            mutation_site_label(jmol1);
+                            generate_title('comparison_1', checked_1);
+                            $('#cmdHistory_1').val('');
+                            cmd_array_1 = [_load.script + ini_label + "hide 3.1;"];
+                            cmd_undone_1 = [];
+                        }
+                    });
+                    $('#clear_cmd_history_1').on('click', function () {
+                        var result = confirm("Are you sure to delete the command history?");
+                        if (result === true) {
+                            $('#cmdHistory_1').val('');
+                            cmd_array_1 = [_load.script + ini_label + "hide 3.1;"];
+                            cmd_undone_1 = [];
+                        }
+                    })
+                </script>
+            </div>
+
+            <div id="savefig_1" class="tab-pane fade">
+                <h3>Save Figure</h3>
+                <div class="row">
+                    <div class="col-lg-2" style="padding-right: 5px">
+                        <input type="text" class="form-control" placeholder="figure_name" id="fig-name_1">
+                    </div>
+                    .png
+                    <button class="btn btn-default" id="save-fig_1">Save Img</button>
+                </div>
+                <script>
+                    $('#save-fig_1').on('click', function () {
+                        Jmol.script(jmol1, "write {0}.png as pngj;".format($('#fig-name_1').val()))
+                    });
+                </script>
+            </div>
+        </div>
+    </div>
+
+    <div id="control_panel_2" class="col-lg-6"
+         style="background-color: wheat; min-height: 50%; height: auto; max-height: 100%; border: 1px dashed black; border-radius: 5px; padding: 10px;">
+        <ul class="nav nav-tabs">
+            <li class="dropdown">
+                <a class="dropdown-toggle" data-toggle="dropdown" href="#">Background Colour<span
+                        class="caret"></span></a>
+                <ul class="dropdown-menu">
+                    <li><a href="#!" onClick="Jmol.script(jmol2, 'color background black;')">Black</a></li>
+                    <li><a href="#!" onClick="Jmol.script(jmol2, 'color background lightgrey;')">Lightgrey</a></li>
+                    <li><a href="#!" onClick="Jmol.script(jmol2, 'color background white;')">White</a></li>
+                </ul>
+            </li>
+            <li class="active"><a data-toggle="tab" href="#structure_model_2">Structure/Model</a></li>
+            <li><a data-toggle="tab" href="#Calpha_2">Backbone</a></li>
+            <li><a data-toggle="tab" href="#environment_residues_2">Environment Residues</a></li>
+            <li><a data-toggle="tab" href="#protein_surface_2">Surface</a></li>
+            <li><a data-toggle="tab" href="#control_2">Control</a></li>
+            <li><a data-toggle="tab" href="#animation_2">Animation</a></li>
+            <li><a data-toggle="tab" href="#console_2">Command Box</a></li>
+            <li><a data-toggle="tab" href="#savefig_2">Save Figure</a></li>
+        </ul>
+
+        <div class="tab-content">
+            <div id="structure_model_2" class="tab-pane fade in active">
+                <h3>Choose Structure and Model to Display:</h3>
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" value="" id="WT_2" checked>
+                    <label class="form-check-label" for="WT_2"> Wild Type Structure (Grey)</label>
+                </div>
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" value="" id="CM_2">
+                    <label class="form-check-label" for="CM_2"> Mutant Crystal Structure (Orange)</label>
+                </div>
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" value="" id="PM_2" checked>
+                    <label class="form-check-label" for="PM_2"> Mutant Predict Model (Green)</label>
+                </div>
+                <script>
+                    var checked_2 = [], ids_2 = ['#WT_2', '#CM_2', '#PM_2'];
+
+                    function display() {
+                        var cmd = (checked_2.length === 0) ? 'hide all' : 'hide {not ' + checked_2.join(' and not ') + '};';
+                        Jmol.script(jmol2, cmd);
+                    }
+
+                    function update_2() {
+                        checked_2.sort();
+                        display();
+                        generate_title('comparison_2', checked_2);
+                    }
+
+                    $(function () {
+                        for (var i = 0; i < 3; i++) {
+                            if ($(ids_2[i]).is(':checked')) {
+                                checked_2.push(i + 1.1)
+                            }
+                        }
+                        checked_2.sort();
+                        display();
+                        generate_title('comparison_2', checked_2);
+                        $(ids_2[0]).click(function () {
+                            if ($(this).is(':checked')) checked_2.push(1.1);
+                            else checked_2.splice(checked_2.indexOf(1.1), 1);
+                            update_2();
+                        });
+                        $(ids_2[1]).click(function () {
+                            if ($(this).is(':checked')) checked_2.push(2.1);
+                            else checked_2.splice(checked_2.indexOf(2.1), 1);
+                            update_2();
+                        });
+                        $(ids_2[2]).click(function () {
+                            if ($(this).is(':checked')) checked_2.push(3.1);
+                            else checked_2.splice(checked_2.indexOf(3.1), 1);
+                            update_2();
+                        })
+                    });
+                </script>
+            </div>
+
+            <div id="Calpha_2" class="tab-pane fade">
+                <h3>Show Backbone as (Select One):</h3>
+                <div class="form-group row">
+                    <div class="col-lg-2">
+                        <select class="form-control" id="bkbone_display_2">
+                            <option value="">Cα</option>
+                            <option value="" selected>Cartoon</option>
+                            <option value="">Strands</option>
+                            <option value="">Clear</option>
+                        </select>
+                    </div>
+                </div>
+                <script>
+                    $(function () {
+                        var bkbone_display_2 = $('#bkbone_display_2'),
+                            bkbone_2 = bkbone_display_2.find('option:selected').text();
+                        Jmol.script(jmol2, bkb[bkbone_2]);
+
+                        bkbone_display_2.on('change', function () {
+                            bkbone_2 = $(this).find('option:selected').text();
+                            var transparency_2 = $('#transparency').val();
+                            if (transparency_2 === "1") Jmol.script(jmol2, '{0} off;'.format(bkbone_2));
+                            else Jmol.script(jmol2, 'color {0} translucent {1};'.format(bkbone_2, transparency_2));
+                            Jmol.script(jmol2, bkb[bkbone_2]);
+                        })
+                    });
+                </script>
+
+                <div class="row">
+                    <div class="col-lg-2" style="text-align:left; width: auto;">Transparency:</div>
+                    <div class="col-lg-3" style="padding: 4.4px 0 0 0;">
+                        <input type="range" min="0" max="1.0" value="0.70" step="0.01" class="slider"
+                               id="transparency_2">
+                    </div>
+                    <div class="col-lg-1" style="width: auto;"><p id="demo_2"></p></div>
+                </div>
+                <script>
+                    var slider_2 = $('#transparency_2');
+                    var output_2 = $('#demo_2');
+
+                    output_2.text(slider_2.val());
+                    slider_2.on('input change', function () {
+                        var transparency_2 = slider_2.val();
+                        output_2.text(transparency_2);
+                        var bkbone_2 = $('#bkbone_display_2').find('option:selected').text();
+                        if (bkbone_2 !== 'Clear') {
+                            Jmol.script(jmol2, 'select *.CA;' + bkbone_2 + ' on; colour ' + bkbone_2 + ' translucent ' + transparency_2)
+                        }
+                        ;
+                        if (transparency_2 === "1") {
+                            Jmol.script(jmol2, bkbone_2 + ' off;')
+                        }
+                    });
+                </script>
+            </div>
+
+            <div id="environment_residues_2" class="tab-pane fade">
+                <h3>Show Environment Residues:</h3>
+                <div id="show_env_res_2">
+                    <div class="col-lg-12">
+                        <input type="number" class="col-lg-1" id="dist_2" min="0" placeholder="5 Angstrom"
+                               style="width: auto; padding-right: 0">
+                        <small class="text-muted col-lg-2" id="input_help_text_2"
+                               style="padding: 10px 0 0 5px; vertical-align: bottom; width: auto; margin-right: 5px;">
+                            unit: Angstrom
+                        </small>
+                        <button class="btn btn-default" id="clear_env_res_2">Clear</button>
+                    </div>
+                    <div class="form-check row">
+                        <div class="col-lg-5" style="margin-bottom: 0;">
+                            <input class="form-check-input" type="checkbox" value="" id="show_env_res_labels_2">
+                            <label class="form-check-label" for="show_env_res_labels_2"> Show Atom Label</label>
+                            <small class="text-muted" id="Label_format_2">(Format: [amino_acid]res_num)</small>
+                        </div>
+                    </div>
+                </div>
+                <script>
+                    var label_format_2 = "[%n]%r;";
+                    $("#dist_2").on('change', function () {
+                        $(this).data('val', $(this).val());
+                        var cmd = "select {within(" + $(this).val() + ", ~SNPpos)}; wireframe 0.1;" +
+                            "colour {oxygen and selected} red; colour {nitrogen and selected} blue;";
+                        if ($('#show_env_res_labels_2').is(':checked')) cmd += "label " + label_format_2;
+                        Jmol.script(jmol2, cmd);
+                        mutation_site_label(jmol2);
+                    });
+
+                    $('#dist_2').on('input', function () {
+                        var prev_2 = $(this).data('val');
+                        var current = $(this).val();
+                        var cmd_to_hide_2 = "select {within(" + prev_2 + ", ~SNPpos)}; wireframe 0;";
+                        var cmd_2 = "select {within(" + current + ", ~SNPpos)}; wireframe 0.1;" +
+                            "colour {oxygen and selected} red; colour {nitrogen and selected} blue;";
+                        if ($('#show_env_res_labels').is(':checked')) cmd_2 += "label " + label_format_2;
+                        cmd_to_hide_2 += "label off;";
+                        Jmol.script(jmol2, cmd_to_hide_2 + cmd_2);
+                        mutation_site_label(jmol2);
+                    });
+
+                    $('#clear_env_res_2').on('click', function () {
+                        var prev = $('#dist_2').data('val');
+                        var cmd_to_hide = "select {within(" + prev + ", ~SNPpos) and not ~SNPpos}; wireframe 0; label off";
+                        Jmol.script(jmol2, cmd_to_hide);
+                        mutation_site_label(jmol2);
+                        $('#dist_2').val(0);
+                    });
+
+                    $('#show_env_res_labels_2').on('click', function () {
+                        var status_2;
+                        if ($(this).is(':checked')) status_2 = label_format_2;
+                        else status_2 = 'OFF';
+                        var _cmd_2 = "select {within(" + $('#dist_2').val() + ", ~SNPpos)}; label " + status_2 + ";";
+                        Jmol.script(jmol2, _cmd_2);
+                        mutation_site_label(jmol2);
+                    });
+                </script>
+
+                <h3>Find Polar Contacts:</h3>
+                <div id="find_polar_contacts_2">
+                    <div class="row">
+                        <div class="col-lg-12">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" value="" id="side_only_2" checked>
+                                <label class="form-check-label" for="side_only_2">Side Chain Only</label>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-lg-12">
+                            <p class="col-lg-2" style="padding: 0 0 0 10px;margin-right: 10px; width: auto;">Contact
+                                range:</p>
+                            <input type="number" class="col-lg-2" placeholder="0.0" min="0" max="5.0" step="0.1"
+                                   id="lower_limit_2" style="padding: 0 0 0 10px; width: auto;">
+                            <p class="col-lg-1" style="width: auto; text-align: center;">~</p>
+                            <input type="number" class="col-lg-1" placeholder="4.0" min="0" max="5.0" step="0.1"
+                                   id="upper_limit_2" style="padding: 0 0 0 10px; width: auto;">
+                            <button type="button" class="btn btn-success"
+                                    style="font-size: 12px; padding: 1px 3px 1px 3px; margin-left: 10px; height: 20px"
+                                    id="measure_btn_2">Measure
+                            </button>
+                            <button type="button" class="btn btn-default"
+                                    style="font-size: 12px; padding: 1px 3px 1px 3px; margin-left: 5px; height: 20px"
+                                    id="clear_btn_2">Clear
+                            </button>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-lg-4">
+                            <small class="text-muted">(Default range 2.2 ~ 3.5 Angstrom)</small>
+                        </div>
+                    </div>
+                    <script>
+                        var lower_2 = 2.2, upper_2 = 3.5, measure_cmd_2 = "define ~nearSNP {within(5, ~SNPpos)};";
+                        $(function () {
+                            $('#lower_limit_2').val(2.2);
+                            $('#upper_limit_2').val(3.5);
+                        });
+
+                        function check_boundary_2(_val) {
+                            return !(_val < 0.0 || _val > 5.0);
+                        };
+                        $('#lower_limit_2').on('input change', function () {
+                            var _tmp = $(this).val();
+                            if (check_boundary_2(_tmp)) lower_2 = _tmp;
+                            else alert('Invalid input. Effective range is between 0.0 and 5.0. Please try again.;');
+                        });
+                        $('#upper_limit_2').on('input change', function () {
+                            var _tmp = $(this).val();
+                            if (check_boundary_2(_tmp)) upper_2 = _tmp;
+                            else alert('Invalid input. Effective range is between 0.0 and 5.0. Please try again.;');
+                        });
+                        $('#measure_btn_2').on('click', function () {
+                            var cmd;
+                            if ($('#side_only_2').is(':checked')) {
+                                cmd = "measure delete; measure range {0} {1} ((oxygen or nitrogen) and ~SNPpos and not backbone) ((oxygen or nitrogen) and ~nearSNP and not ~SNPpos);".format(lower_2, upper_2);
+                            } else {
+                                cmd = "measure delete; measure range {0} {1} ((oxygen or nitrogen) and ~SNPpos) ((oxygen or nitrogen) and ~nearSNP and not ~SNPpos);".format(lower_2, upper_2);
+                            }
+                            Jmol.script(jmol2, measure_cmd_2 + cmd);
+
+                            var dist_2 = $('#dist_2');
+                            if (dist_2.val() === '' || dist_2.val() < 5.0) {
+                                dist_2.val(5);
+                                dist_2.data('val', 5);
+                                Jmol.script(jmol2,
+                                    "select {within(" + 5 + ", ~SNPpos)}; wireframe 0.1;" +
+                                    "colour {oxygen and selected} red; colour {nitrogen and selected} blue;")
+                            }
+                        });
+                        $('#clear_btn_2').on('click', function () {
+                            Jmol.script(jmol2, 'measure off;')
+                        });
+                    </script>
+                </div>
+            </div>
+
+            <div id="protein_surface_2" class="tab-pane fade">
+                <h3>Show Protein Surface Cavity:</h3>
+                <form>
+                    <label class="checkbox-inline">
+                        <input type="checkbox" value="" id="WT_cavity_2">Wild Type (Grey)</label>
+                    <label class="checkbox-inline">
+                        <input type="checkbox" value="" id="CM_cavity_2">Mutant Crystal (Orange)</label>
+                    <label class="checkbox-inline">
+                        <input type="checkbox" value="" id="PM_cavity_2">Mutant Predict (Green)</label>
+                </form>
+                <div class="row">
+                    <div class="col-lg-12">
+                        <button class="btn btn-default" id="show_cavity_2">Show Cavity</button>
+                        <button class="btn btn-default" id="hide_cavity_2">Hide Cavity</button>
+                    </div>
+                </div>
+
+                <div id="Cav_div_2" style="display: none;">
+                    <h5>Cavity Transparency</h5>
+                </div>
+                <div class="col-lg-12" id="WT_Cav_div_2" style="display: none;">
+                    <div class="col-lg-2" style="text-align:right; width: auto;">
+                        Wild Type:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+                    </div>
+                    <div class="col-lg-3" style="padding: 4.4px 0 0 0;">
+                        <input type="range" min="0" max="1.0" value="0.30" step="0.01" class="slider"
+                               id="WT_Cav_Tr_2">
+                    </div>
+                    <div class="col-lg-1" style="width: auto;"><p id="WT_Cav_Tr_Val_2"></p></div>
+                </div>
+                <div class="col-lg-12" id="CM_Cav_div_2" style="display: none;">
+                    <div class="col-lg-2" style="text-align:right;width: auto;">Mutant Crystal:</div>
+                    <div class="col-lg-3" style="padding: 4.4px 0 0 0;">
+                        <input type="range" min="0" max="1.0" value="0.30" step="0.01" class="slider"
+                               id="CM_Cav_Tr_2">
+                    </div>
+                    <div class="col-lg-1" style="width: auto;"><p id="CM_Cav_Tr_Val_2"></p></div>
+                </div>
+                <div class="col-lg-12" id="PM_Cav_div_2" style="display: none;">
+                    <div class="col-lg-2" style="text-align:right;width: auto;">Mutant Predict:</div>
+                    <div class="col-lg-3" style="padding: 4.4px 0 0 0;">
+                        <input type="range" min="0" max="1.0" value="0.30" step="0.01" class="slider"
+                               id="PM_Cav_Tr_2">
+                    </div>
+                    <div class="col-lg-1" style="width: auto;"><p id="PM_Cav_Tr_Val_2"></p></div>
+                </div>
+
+                <h3>Show Variant Site Solvent Accessibility:</h3>
+                <form>
+                    <label class="checkbox-inline">
+                        <input type="checkbox" value="" id="WT_SA_2">Wild Type (Grey)</label>
+                    <label class="checkbox-inline">
+                        <input type="checkbox" value="" id="CM_SA_2">Mutant Crystal (Orange)</label>
+                    <label class="checkbox-inline">
+                        <input type="checkbox" value="" id="PM_SA_2">Mutant Predict (Green)</label>
+                </form>
+                <div class="row">
+                    <div class="col-lg-12">
+                        <button class="btn btn-default" id="show_SA_2">Show Solvent Accessibility</button>
+                        <button class="btn btn-default" id="hide_SA_2">Hide Solvent Accessibility</button>
+                    </div>
+                </div>
+
+                <div id="SA_div_2" style="display: none;">
+                    <h5>Solvent Accessibility Transparency</h5>
+                </div>
+                <div class="col-lg-12" id="WT_SA_div_2" style="display: none;">
+                    <div class="col-lg-2" style="text-align:right; width: auto;">
+                        Wild Type:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+                    </div>
+                    <div class="col-lg-3" style="padding: 4.4px 0 0 0;">
+                        <input type="range" min="0" max="1.0" value="0.30" step="0.01" class="slider"
+                               id="WT_SA_Tr_2">
+                    </div>
+                    <div class="col-lg-1" style="width: auto;"><p id="WT_SA_Tr_Val_2"></p></div>
+                </div>
+                <div class="col-lg-12" id="CM_SA_div_2" style="display: none;">
+                    <div class="col-lg-2" style="text-align:right;width: auto;">Mutant Crystal:</div>
+                    <div class="col-lg-3" style="padding: 4.4px 0 0 0;">
+                        <input type="range" min="0" max="1.0" value="0.30" step="0.01" class="slider"
+                               id="CM_SA_Tr_2">
+                    </div>
+                    <div class="col-lg-1" style="width: auto;"><p id="CM_SA_Tr_Val_2"></p></div>
+                </div>
+                <div class="col-lg-12" id="PM_SA_div_2" style="display: none;">
+                    <div class="col-lg-2" style="text-align:right;width: auto;">Mutant Predict:</div>
+                    <div class="col-lg-3" style="padding: 4.4px 0 0 0;">
+                        <input type="range" min="0" max="1.0" value="0.30" step="0.01" class="slider"
+                               id="PM_SA_Tr_2">
+                    </div>
+                    <div class="col-lg-1" style="width: auto;"><p id="PM_SA_Tr_Val_2"></p></div>
+                </div>
+
+                <h5>Usefull Links</h5>
+                <a href="https://chemapps.stolaf.edu/jmol/docs/#isosurface">Jmol/Jsmol Interactive Scripting
+                    Documentation
+                    Isosurface</a> |
+                <a href="http://jmol.sourceforge.net/docs/surface/">Jmol surface</a> |
+
+                <script>
+                    var cavity_checked_2 = [], cavity_ids_2 = ['#WT_cavity_2', '#CM_cavity_2', '#PM_cavity_2'],
+                        cavity_called_2 = [false, false, false];
+                    $('#show_cavity_2').on('click', function () {
+                        Jmol.script(jmol2, 'echo "Processing ..."; refresh;');
+                        cavity_checked_2 = [];
+                        for (var i = 0; i < 3; i++) {
+                            if ($(cavity_ids_2[i]).is(':checked')) {
+                                cavity_checked_2.push(i + 1.1)
+                            }
+
+                            if (cavity_checked_2.length > 0) {
+                                $('#Cav_div_2').css('display', 'block');
+
+                                if (cavity_checked_2.indexOf(1.1) >= 0) {
+                                    $('#WT_Cav_div_2').css('display', 'block');
+                                    if (cavity_called_2[0] === true) {
+                                        Jmol.script(jmol2, "isosurface A_cavity on;")
+                                    }
+                                    else {
+                                        Jmol.script(jmol2, cavity_scripts.A_cavity)
+                                        cavity_called_2[0] = true;
+                                    }
+                                } else {
+                                    $('#WT_Cav_div_2').css('display', 'none');
+                                    if (cavity_called_2[0] === true) {
+                                        Jmol.script(jmol2, "isosurface A_cavity off;")
+                                    }
+                                }
+
+                                if (cavity_checked_2.indexOf(2.1) >= 0) {
+                                    $('#CM_Cav_div_2').css('display', 'block');
+                                    if (cavity_called_2[1] === true) {
+                                        Jmol.script(jmol2, "isosurface B_cavity on;")
+                                    }
+                                    else {
+                                        Jmol.script(jmol2, cavity_scripts.B_cavity)
+                                        cavity_called_2[1] = true;
+                                    }
+                                } else {
+                                    $('#CM_Cav_div_2').css('display', 'none');
+                                    if (cavity_called_2[1] === true) {
+                                        Jmol.script(jmol2, "isosurface B_cavity off;")
+                                    }
+                                }
+
+                                if (cavity_checked_2.indexOf(3.1) >= 0) {
+                                    $('#PM_Cav_div_2').css('display', 'block');
+                                    if (cavity_called_2[2] === true) {
+                                        Jmol.script(jmol2, "isosurface C_cavity on;")
+                                    }
+                                    else {
+                                        Jmol.script(jmol2, cavity_scripts.C_cavity)
+                                        cavity_called_2[2] = true;
+                                    }
+                                } else {
+                                    $('#PM_Cav_div_2').css('display', 'none');
+                                    if (cavity_called_2[2] === true) {
+                                        Jmol.script(jmol2, "isosurface C_cavity off;")
+                                    }
+                                }
+                            } else {
+                                $('#Cav_div_2').css('display', 'none');
+                                $('#WT_Cav_div_2').css('display', 'none');
+                                $('#CM_Cav_div_2').css('display', 'none');
+                                $('#PM_Cav_div_2').css('display', 'none');
+                                if (cavity_called_2[0] === true) {
+                                    Jmol.script(jmol2, "isosurface A_cavity off;")
+                                }
+                                if (cavity_called_2[1] === true) {
+                                    Jmol.script(jmol2, "isosurface B_cavity off;")
+                                }
+                                if (cavity_called_2[2] === true) {
+                                    Jmol.script(jmol2, "isosurface C_cavity off;")
+                                }
+                            }
+                        }
+                        Jmol.script(jmol2, "echo;")
+                    });
+                    $('#hide_cavity_2').on('click', function () {
+                        $('#Cav_div_2').css('display', 'none');
+                        $('#WT_Cav_div_2').css('display', 'none');
+                        $('#CM_Cav_div_2').css('display', 'none');
+                        $('#PM_Cav_div_2').css('display', 'none');
+                        $('#WT_cavity_2').attr('checked', false);
+                        $('#CM_cavity_2').attr('checked', false);
+                        $('#PM_cavity_2').attr('checked', false);
+                        Jmol.script(jmol2, "isosurface A_cavity off; isosurface B_cavity off; isosurface C_cavity off;")
+                    });
+                    //
+                    var WT_Cav_Tr_2 = 0.30, CM_Cav_Tr_2 = 0.30, PM_Cav_Tr_2 = 0.30;
+                    var WT_SA_Tr_2 = 0.30, CM_SA_Tr_2 = 0.30, PM_SA_Tr_2 = 0.30;
+                    $(function () {
+                        $('#WT_Cav_Tr_Val_2').text(0.30);
+                        $('#CM_Cav_Tr_Val_2').text(0.30);
+                        $('#PM_Cav_Tr_Val_2').text(0.30);
+                        $('#WT_SA_Tr_Val_2').text(0.30);
+                        $('#CM_SA_Tr_Val_2').text(0.30);
+                        $('#PM_SA_Tr_Val_2').text(0.30);
+                    });
+                    $('#WT_Cav_Tr_2').on('change', function () {
+                        WT_Cav_Tr_2 = $(this).val();
+                        Jmol.script(jmol2, "isosurface A_cavity translucent {0};".format(WT_Cav_Tr_2));
+                        $('#WT_Cav_Tr_Val_2').text(WT_Cav_Tr_2);
+                    });
+                    $('#CM_Cav_Tr_2').on('change', function () {
+                        CM_Cav_Tr_2 = $(this).val();
+                        Jmol.script(jmol2, "isosurface B_cavity translucent {0};".format(CM_Cav_Tr_2));
+                        $('#CM_Cav_Tr_Val_2').text(CM_Cav_Tr_2);
+                    });
+                    $('#PM_Cav_Tr_2').on('change', function () {
+                        PM_Cav_Tr_2 = $(this).val();
+                        Jmol.script(jmol2, "isosurface C_cavity translucent {0};".format(PM_Cav_Tr_2));
+                        $('#PM_Cav_Tr_Val_2').text(PM_Cav_Tr_2);
+                    });
+                    $('#WT_SA_Tr_2').on('change', function () {
+                        WT_SA_Tr_2 = $(this).val();
+                        Jmol.script(jmol2, "isosurface A_SA translucent {0};".format(WT_SA_Tr_2));
+                        $('#WT_SA_Tr_Val_2').text(WT_SA_Tr_2);
+                    });
+                    $('#CM_SA_Tr_2').on('change', function () {
+                        CM_SA_Tr_2 = $(this).val();
+                        Jmol.script(jmol2, "isosurface B_SA translucent {0};".format(CM_SA_Tr_2));
+                        $('#CM_SA_Tr_Val_2').text(CM_SA_Tr_2);
+                    });
+                    $('#PM_SA_Tr_2').on('change', function () {
+                        PM_SA_Tr_2 = $(this).val();
+                        Jmol.script(jmol2, "isosurface C_SA translucent {0};".format(PM_SA_Tr_2));
+                        $('#PM_SA_Tr_Val_2').text(PM_SA_Tr_2);
+                    });
+                    //
+                    var SA_checked_2 = [], SA_ids_2 = ['#WT_SA_2', '#CM_SA_2', '#PM_SA_2'],
+                        SA_called_2 = [false, false, false];
+                    $('#show_SA_2').on('click', function () {
+                        Jmol.script(jmol2, 'echo "Processing ..."; refresh;');
+                        SA_checked_2 = [];
+                        for (var i = 0; i < 3; i++) {
+                            if ($(SA_ids_2[i]).is(':checked')) {
+                                SA_checked_2.push(i + 1.1)
+                            }
+                        }
+
+                        if (SA_checked_2.length > 0) {
+                            $('#SA_div_2').css('display', 'block');
+
+                            if (SA_checked_2.indexOf(1.1) >= 0) {
+                                $('#WT_SA_div_2').css('display', 'block');
+                                if (SA_called_2[0] === true) {
+                                    Jmol.script(jmol2, "isosurface A_SA on;")
+                                }
+                                else {
+                                    Jmol.script(jmol2, SA_scripts_2.A_SA)
+                                    SA_called_2[0] = true;
+                                }
+                            } else {
+                                $('#WT_SA_div_2').css('display', 'none');
+                                if (SA_called_2[0] === true) {
+                                    Jmol.script(jmol2, "isosurface A_SA off;")
+                                }
+                            }
+
+                            if (SA_checked_2.indexOf(2.1) >= 0) {
+                                $('#CM_SA_div_2').css('display', 'block');
+                                if (SA_called_2[1] === true) {
+                                    Jmol.script(jmol2, "isosurface B_SA on;")
+                                }
+                                else {
+                                    Jmol.script(jmol2, SA_scripts_2.B_SA)
+                                    SA_called_2[1] = true;
+                                }
+                            } else {
+                                $('#CM_SA_div_2').css('display', 'none');
+                                if (SA_called_2[1] === true) {
+                                    Jmol.script(jmol2, "isosurface B_SA off;")
+                                }
+                            }
+
+                            if (SA_checked_2.indexOf(3.1) >= 0) {
+                                $('#PM_SA_div_2').css('display', 'block');
+                                if (SA_called_2[2] === true) {
+                                    Jmol.script(jmol2, "isosurface C_SA on;")
+                                }
+                                else {
+                                    Jmol.script(jmol2, SA_scripts_2.C_SA)
+                                    SA_called_2[2] = true;
+                                }
+                            } else {
+                                $('#PM_SA_div_2').css('display', 'none');
+                                if (SA_called_2[2] === true) {
+                                    Jmol.script(jmol2, "isosurface C_SA off;")
+                                }
+                            }
+                            Jmol.script(jmol2, "echo;")
+                        } else {
+                            $('#SA_div_2').css('display', 'none');
+                            Jmol.script(jmol2, "echo;");
+                        }
+                    });
+                    $('#hide_SA_2').on('click', function () {
+                        $('#SA_div_2').css('display', 'none');
+                        $('#WT_SA_div_2').css('display', 'none');
+                        $('#CM_SA_div_2').css('display', 'none');
+                        $('#PM_SA_div_2').css('display', 'none');
+                        $('#WT_SA_2').attr('checked', false);
+                        $('#CM_SA_2').attr('checked', false);
+                        $('#PM_SA_2').attr('checked', false);
+                        Jmol.script(jmol2, "isosurface A_SA off; isosurface B_SA off; isosurface C_SA off;")
+                    })
+                </script>
+            </div>
+
+            <div id="animation_2" class="tab-pane fade">
+                <h3>Fancy Animations? Make the Models Spin:</h3>
+                <div class="row" style="padding: 7px 0 7px 10px;">
+                    <strong>Spin:</strong>
+                </div>
+                <div class="form-group row">
+                    <div class="col-lg-12">
+                        <button type="button" class="btn btn-default" id="spin_x_2">Spin X</button>
+                        <button type="button" class="btn btn-default" id="spin_y_2">Spin Y</button>
+                        <button type="button" class="btn btn-default" id="spin_z_2">Spin Z</button>
+                        <button type="button" class="btn btn-default" id="stop_spin_2">Stop</button>
+                    </div>
+                </div>
+                <div class="form-group row" style="margin-left: 5px;margin-bottom: 0;">
+                    <div class="col-lg-1" style="padding-left: 10px;">Speed:</div>
+                    <div class="col-lg-3" style="padding: 4.4px 0 0 0;"><input type="range" min="1" max="100" value="3"
+                                                                               step="1" class="slider"
+                                                                               id="spin_speed_2">
+                    </div>
+                    <div class="col-lg-1" style="padding: 1px 0 0 15px; width: auto;"><p id="speed_2"></p></div>
+                </div>
+
+                <script>
+                    var speed_2, clicked_2;
+                    $(function () {
+                        speed_2 = $('#spin_speed_2').val();
+                        $('#speed_2').text(speed_2);
+                    });
+                    $('#spin_x_2').on('click', function () {
+                        Jmol.script(jmol2, "set spinX " + speed_2 + "; set spinY 0; set spinZ 0; spin on;");
+                        clicked_2 = 'X';
+                    });
+                    $('#spin_y_2').on('click', function () {
+                        Jmol.script(jmol2, "set spinY " + speed_2 + "; set spinX 0; set spinZ 0; spin on;");
+                        clicked_2 = 'Y';
+                    });
+                    $('#spin_z_2').on('click', function () {
+                        Jmol.script(jmol2, "set spinZ " + speed_2 + "; set spinX 0; set spinY 0; spin on;");
+                        clicked_2 = 'Z';
+                    });
+
+                    $('#spin_speed_2').on('change', function () {
+                        speed_2 = $(this).val();
+                        $('#speed_2').text(speed_2);
+                        var cmd;
+                        switch (clicked_2) {
+                            case 'X':
+                                cmd = "set spin" + "X " + speed_2 + "; set spinY 0; set spinZ 0;";
+                                break;
+                            case 'Y':
+                                cmd = "set spin" + "Y " + speed_2 + "; set spinX 0; set spinZ 0;";
+                                break;
+                            case 'Z':
+                                cmd = "set spin" + "Z " + speed_2 + "; set spinX 0; set spinY 0;";
+                                break;
+                        }
+                        Jmol.script(jmol2, cmd);
+                    });
+                    $('#stop_spin_2').on('click', function () {
+                        Jmol.script(jmol2, 'spin off;');
+                    });
+                </script>
+            </div>
+
+            <div id="control_2" class="tab-pane fade">
+                <h3>Don't Have a Mouse? Try Our Control Panel:</h3>
+                <h5>Center at</h5>
+                <div class="row">
+                    <div class="col-lg-12">
+                        <button class="btn btn-default" id="Mutation_Site_2">Variant Site</button>
+                        <button class="btn btn-default" id="Protein_2">Whole Protein</button>
+                    </div>
+                </div>
+
+                <h5>Rotation</h5>
+                <div class="row">
+                    <div class="col-lg-12" style="padding: 0 0 0 10px; margin-bottom: 6px;">
+                        <button id="rotate_x_45_2" class="btn btn-default">Rotate X 45&#176;</button>
+                        <button id="rotate_y_45_2" class="btn btn-default">Rotate Y 45&#176;</button>
+                        <button id="rotate_z_45_2" class="btn btn-default">Rotate Z 45&#176;</button>
+                        <small class="text-muted" id="rotate_help_text_2"
+                               style="padding-left: 5px; vertical-align: bottom">
+                            Rotate anti-clockwise
+                        </small>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-lg-12" style="padding: 0 0 0 10px; margin-bottom: 6px;">
+                        <div class="col-lg-1" style="padding:0">
+                            <input type="number" class="form-control" id="degrees_2" placeholder="5"
+                                   style="padding:0 0 0 10px">
+                        </div>
+                        <div class="col-lg-4">
+                            <button id="rotate_x_2" class="btn btn-default">Rotate by X</button>
+                            <button id="rotate_y_2" class="btn btn-default">Rotate by Y</button>
+                            <button id="rotate_z_2" class="btn btn-default">Rotate by Z</button>
+                        </div>
+                    </div>
+                </div>
+
+                <h5>Zoom</h5>
+                <div class="row">
+                    <div class="col-lg-12" style="padding: 0 0 0 10px">
+                        <button id="zoomin_2" class="btn btn-default">Zoom In</button>
+                        <button id="zoomout_2" class="btn btn-default">Zoom Out</button>
+                    </div>
+                </div>
+                <script>
+                    var degrees_2 = 5;
+                    $('#degrees_2').on('change', function () {
+                        degrees_2 = $(this).val();
+                    });
+                    $('#Mutation_Site_2').on('click', function () {
+                        Jmol.script(jmol2, 'center ~SNPpos;');
+                    });
+                    $('#Protein_2').on('click', function () {
+                        Jmol.script(jmol2, 'center all;');
+                    });
+                    $('#rotate_x_2').on('click', function () {
+                        Jmol.script(jmol2, "rotate x {0};".format(degrees_2))
+                    });
+                    $('#rotate_y_2').on('click', function () {
+                        Jmol.script(jmol2, "rotate y {0};".format(degrees_2))
+                    });
+                    $('#rotate_z_2').on('click', function () {
+                        Jmol.script(jmol2, "rotate z {0};".format(degrees_2))
+                    });
+                    $('#rotate_x_45_2').on('click', function () {
+                        Jmol.script(jmol2, "rotate x 45;")
+                    });
+                    $('#rotate_y_45_2').on('click', function () {
+                        Jmol.script(jmol2, "rotate y 45;")
+                    });
+                    $('#rotate_z_45_2').on('click', function () {
+                        Jmol.script(jmol2, "rotate z 45;")
+                    });
+                    $('#zoomin_2').on('click', function () {
+                        Jmol.script(jmol2, "zoom in;")
+                    });
+                    $('#zoomout_2').on('click', function () {
+                        Jmol.script(jmol2, "zoom out;")
+                    });
+                </script>
+            </div>
+
+            <div id="console_2" class="tab-pane fade">
+                <h3>Jmol Command Input:</h3>
+                <div class="col-lg-12" style="padding: 0 0 0 10px; margin-bottom: 6px;">
+                    <div class="col-lg-4" style="width: auto;">
+                        <textarea class="longInput" id="cmdArea_2" cols="50" rows="7" style="overflow-y: scroll;"
+                                  placeholder="User command input."></textarea>
+                    </div>
+                    <div class="col-lg-2" style="height: auto; padding: 0; width: auto;">
+                        <button class="btn btn-success" id="cmd_apply_2" style="margin-top: 5px;">Apply</button>
+                        <br>
+                        <button class="btn btn-default" id="cmd_undo_2" style="margin-top: 5px;">Undo</button>
+                        <br>
+                        <button class="btn btn-default" id="cmd_redo_2" style="margin-top: 5px;">Redo</button>
+                    </div>
+                    <div class="col-lg-1">
+                        <button class="btn btn-primary" id="reset_2" style="margin-top: 5px;">Reset</button>
+                    </div>
+                </div>
+                <h3>Command History:</h3>
+                <div class="col-lg-12">
+                    <div class="col-lg-4" style="width: auto;">
+                        <textarea id="cmdHistory_2" cols="50" rows="5"
+                                  style="overflow-y: scroll;background-color: wheat; border: none;"
+                                  placeholder="Input command history will appear here." disabled></textarea>
+                    </div>
+                    <div class="col-lg-2" style="height: auto; padding: 0; width: auto;">
+                        <button class="btn btn-default" id="clear_cmd_history_2"
+                                style="height: auto; width: auto; resize: none;">Clear History
+                        </button>
+                    </div>
+                </div>
+                <h5>Usefull Links</h5>
+                <a href="https://chemapps.stolaf.edu/jmol/docs/">Jmol/JSmol Interactive Scripting Documentation</a> |
+                &nbsp;
+                <a href="http://jmol.sourceforge.net/docs/">Jmol Documentation</a> | &nbsp;
+                <a href="http://jmol.sourceforge.net/demo/">Demonstration of Jmol Capabilities</a> | &nbsp;
+                <a href="http://wiki.jmol.org/index.php/Main_Page">Jmol Wiki</a>
+                <script>
+                    var cmd_input_2, cmd_array_2 = [_load.script + ini_label + "hide 3.1;"], cmd_undone_2 = [];
+                    $('#cmdArea_2').on('input change', function () {
+                        cmd_input_2 = $(this).val()
+                    });
+                    $('#cmd_apply_2').on('click', function () {
+                        // avoid empty input
+                        if (cmd_input_2 === "") {
+                            alert("Command input is empty, type in commands before apply.");
+                        }
+                        else {
+                            var Ret = Jmol.scriptWaitAsArray(jmol2, cmd_input_2);
+                            // evaluate the input command
+                            if ((Ret + "").indexOf("ERROR") >= 0) {
+                                alert("Invalid Jmol comands. " + Ret[0][0][3].replace(/\|/g, "\n"));
+                            }
+                            // if valid, execute; add valid cmd to cmd_array; write valid cmd to cmdHistory
+                            else {
+                                // remove any flanking spaces and line breaks
+                                cmd_input_2 = cmd_input_2.trim();
+                                cmd_input_2 = cmd_input_2.replace("\n", "; ");
+                                // check if there is a ; at the end
+                                if (cmd_input_2.trim().charAt(cmd_input_2.length - 1) !== ";") {
+                                    cmd_input_2 += ";"
+                                }
+                                // execute valid cmd
+                                Jmol.script(jmol2, cmd_input_2);
+                                // add valid cmd to cmd_array
+                                cmd_array_2.push(cmd_input_2);
+                                // $('#cmdHistory').append(cmd_input + " ");
+                                $('#cmdHistory_2').val(cmd_array_2.slice(1, cmd_array_2.length).join('\n'));
+                                // empty the cmd_input for next cmd_input
+                                $('#cmdArea_2').val("");
+                                cmd_input_2 = "";
+                            }
+                        }
+                    });
+                    $('#cmd_undo_2').on('click', function () {
+                        // prevent undo from deleting the initial status (_load.script + "hide 3.1")
+                        if (cmd_array_2.length === 1) {
+                            alert("Cannot not do undo, there are no history commands to undo.");
+                        } else {
+                            // 1. pop the last command from cmd_array, and add it to cmd_undone
+                            cmd_undone_2.push(cmd_array_2.pop());
+                            // 2. Write cmd_history to #cmdHistory i.e. remove the last command
+                            $('#cmdHistory_2').val(cmd_array_2.slice(1, cmd_array_2.length).join('\n'));
+                            // 3. Execute current cmd_array, i.e. restore to the last status
+                            Jmol.script(jmol2, cmd_array_2.join(' '))
+                        }
+                    });
+                    $('#cmd_redo_2').on('click', function () {
+                        // if cmd_undone is empty, alert that and prevent any action from redo
+                        if (cmd_undone_2.length === 0) {
+                            alert("There is no more commands to redo.");
+                        } else {
+                            // 1. pop cmd_undone and add it to cmd_array
+                            var redo = cmd_undone_2.pop();
+                            cmd_array_2.push(redo);
+                            // 2. update cmdHistory
+                            $('#cmdHistory_2').val(cmd_array_2.slice(1, cmd_array_2.length).join('\n'));
+                            // rerun the command
+                            Jmol.script(jmol2, redo);
+                        }
+                    });
+                    $('#reset_2').on('click', function () {
+                        var reset_confirm = confirm("Are you sure to reset the viewer? It will clear the command history and cannot be undone.");
+                        if (reset_confirm === true) {
+                            // Jmol.script(jmol2, _load.script + ini_label + "hide 2.1;");
+                            cavity_called_2 = [false, false, false];
+                            SA_called_2 = [false, false, false];
+                            _load = {script: load(wt, wt_chn, mt_cst, mt_cst_chn, mt_pre, mt_pre_chn, pos)};
+                            ini_label = generate_ini_label(wt, wt_chn, pos, wt_aa, mt_cst, mt_cst_chn, mt_aa, mt_pre_chn);
+                            SA_scripts_2 = sa_scripts(pos);
+
+                            $('#appdiv2').html(Jmol.getAppletHtml('jmol2', ext(Info, _load)));
+                            Jmol.script(jmol2, "hide 2.1;");
+                            mutation_site_label(jmol2);
+                            generate_title('comparison_2', checked_2);
+
+                            $('#cmdHistory_2').val('');
+                            cmd_array_2 = [_load.script + ini_label + "hide 2.1;"];
+                            cmd_undone_2 = [];
+                        }
+                    });
+                    $('#clear_cmd_history_2').on('click', function () {
+                        var result = confirm("Are you sure to delete the command history?");
+                        if (result === true) {
+                            $('#cmdHistory_2').val('');
+                            cmd_array_2 = [_load.script + ini_label + "hide 2.1;"];
+                            cmd_undone_2 = [];
+                        }
+                    })
+                </script>
+            </div>
+
+            <div id="savefig_2" class="tab-pane fade">
+                <h3>Save Figure</h3>
+                <div class="row">
+                    <div class="col-lg-12">
+                        <div class="col-lg-2" style="padding-right: 5px;">
+                            <input type="text" class="form-control" placeholder="figure_name" id="fig-name_2">
+                        </div>
+                        .png
+                        <button class="btn btn-default" id="save-fig_2">Save Img</button>
+                    </div>
+                </div>
+                <script>
+                    $('#save-fig_2').on('click', function () {
+                        Jmol.script(jmol2, "write {0}.png as pngj;".format($('#fig-name_2').val()))
+                    });
+                </script>
+            </div>
+        </div>
+    </div>
+</div>
+</body>
+</html>
